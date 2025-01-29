@@ -1,17 +1,17 @@
-const createError = require("http-errors");
 const express = require("express");
+const createError = require("http-errors");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
 const multer = require("multer");
 const responseFormatter = require("./lib/middleware/responseFormatter");
+const serverless = require("serverless-http");
 
 const indexRouter = require("./routes/index");
 const usersRouter = require("./routes/users");
 const menuRouter = require("./routes/menu");
 
 const app = express();
-const db = require("./lib/dbConnection");
 const upload = multer();
 
 const bodyParserMiddleware = [
@@ -46,7 +46,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Database Connection
+const db = require("./lib/dbConnection");
 db.getConnection((err, connection) => {
   if (err) {
     console.error("Error connecting to MySQL:", err.message);
@@ -56,6 +56,4 @@ db.getConnection((err, connection) => {
   }
 });
 
-// **This is required for Vercel deployment**
-const serverless = require("serverless-http");
 module.exports = serverless(app);
