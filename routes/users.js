@@ -3,7 +3,6 @@ const router = express.Router();
 const db = require("../lib/dbConnection");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
 
 // ✅ 1. LOGIN - Authenticate User
 router.post("/login", (req, res) => {

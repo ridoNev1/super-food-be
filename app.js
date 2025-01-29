@@ -6,7 +6,7 @@ const logger = require("morgan");
 const multer = require("multer");
 const responseFormatter = require("./lib/middleware/responseFormatter");
 const serverless = require("serverless-http");
-
+require("dotenv").config();
 const indexRouter = require("./routes/index");
 const usersRouter = require("./routes/users");
 const menuRouter = require("./routes/menu");
