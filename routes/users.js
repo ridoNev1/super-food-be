@@ -12,7 +12,7 @@ router.post("/login", (req, res) => {
     return res.formatResponse(400, false, "Email and Password are required");
   }
 
-  const query = "SELECT * FROM user WHERE email = ? LIMIT 1";
+  const query = "SELECT * FROM users WHERE email = ? LIMIT 1";
   db.query(query, [email], async (err, results) => {
     if (err) {
       console.error("Database Error:", err.message);
@@ -79,7 +79,7 @@ router.post("/register", async (req, res) => {
       );
     }
 
-    const checkQuery = `SELECT id FROM user WHERE email = ? OR phone_number = ? OR username = ? LIMIT 1`;
+    const checkQuery = `SELECT id FROM users WHERE email = ? OR phone_number = ? OR username = ? LIMIT 1`;
     db.query(
       checkQuery,
       [email, phone_number, username],
@@ -103,7 +103,7 @@ router.post("/register", async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         const insertQuery = `
-      INSERT INTO user (nama, alamat, email, password, phone_number, user_level, username, image_profile, created_at, update_at) 
+      INSERT INTO users (nama, alamat, email, password, phone_number, user_level, username, image_profile, created_at, updated_at) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`;
 
         db.query(

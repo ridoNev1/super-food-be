@@ -5,7 +5,6 @@ const cookieParser = require("cookie-parser");
 const logger = require("morgan");
 const multer = require("multer");
 const responseFormatter = require("./lib/middleware/responseFormatter");
-const serverless = require("serverless-http");
 require("dotenv").config();
 const indexRouter = require("./routes/index");
 const usersRouter = require("./routes/users");
@@ -46,14 +45,29 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Database Connection
 const db = require("./lib/dbConnection");
 db.getConnection((err, connection) => {
   if (err) {
-    console.error("Error connecting to MySQL:", err.message);
+    console.error("❌ Error connecting to MySQL:", err.message);
   } else {
-    console.log("Connected to MySQL database!");
+    console.log("✅ Connected to MySQL database!");
     connection.release();
   }
 });
 
-module.exports = serverless(app);
+// Start Server (For Local Testing)
+if (process.env.NODE_ENV !== "serverless") {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel
+if (process.env.NODE_ENV === "serverless") {
+  const serverless = require("serverless-http");
+  module.exports = serverless(app);
+} else {
+  module.exports = app;
+}
