@@ -10,7 +10,6 @@ const indexRouter = require("./routes/index");
 const usersRouter = require("./routes/users");
 const menuRouter = require("./routes/menu");
 const db = require("./lib/dbConnection");
-const serverless = require("serverless-http");
 
 const app = express();
 const upload = multer();
