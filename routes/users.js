@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require("../lib/dbConnection");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const upload = require("../lib/middleware/uploadFile");
+const uploadMiddleware = require("../lib/middleware/uploadFile");
 const fs = require("fs");
 
 // ✅ 1. LOGIN - Authenticate User
@@ -134,7 +134,7 @@ router.post("/register", async (req, res) => {
  */
 router.patch(
   "/update-profile/:id",
-  upload.single("image_profile"),
+  uploadMiddleware("image_profile"),
   async (req, res) => {
     try {
       const userId = req.params.id;

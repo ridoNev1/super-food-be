@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../lib/dbConnection");
-const upload = require("../lib/middleware/uploadFile");
+const uploadMiddleware = require("../lib/middleware/uploadFile");
 const fs = require("fs");
 
 // ✅ 1. Create a New Menu Item with Image Upload
-router.post("/menu", upload.array("images", 5), async (req, res) => {
+router.post("/menu", uploadMiddleware("image", true), async (req, res) => {
   try {
     const { name, price, description, quantity } = req.body;
     const images = req.files;
@@ -138,7 +138,7 @@ router.get("/menu/:id", async (req, res) => {
 /**
  * ✅ UPDATE MENU - Update a menu item with optional image update
  */
-router.put("/menu/:id", upload.array("images", 5), async (req, res) => {
+router.put("/menu/:id", uploadMiddleware("image", true), async (req, res) => {
   try {
     const menuId = req.params.id;
     const { name, price, description, quantity, deleteImages } = req.body;
