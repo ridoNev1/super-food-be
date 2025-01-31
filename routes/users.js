@@ -4,13 +4,15 @@ const db = require("../lib/dbConnection");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const uploadMiddleware = require("../lib/middleware/uploadFile");
-const AWS = require("aws-sdk");
+const { S3Client, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 
 // 🔹 Configure AWS S3
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+const s3 = new S3Client({
   region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
 });
 const S3_BUCKET = process.env.S3_BUCKET_NAME;
 
@@ -147,9 +149,9 @@ router.patch(
     try {
       const userId = req.params.id;
       const { alamat } = req.body;
-      const image = req.file;
+      const newImageUrl = req.fileUrl || null;
 
-      if (!alamat && !image) {
+      if (!alamat && !newImageUrl) {
         return res.formatResponse(
           400,
           false,
@@ -158,17 +160,19 @@ router.patch(
       }
 
       const connection = await db.getConnection();
-
       const [users] = await connection.query(
         `SELECT image_profile FROM users WHERE id = ? LIMIT 1`,
         [userId]
       );
+
       if (users.length === 0) {
         connection.release();
         return res.formatResponse(404, false, "User not found");
       }
 
       const oldImage = users[0].image_profile;
+
+      // 🔹 Update Database
       let updateQuery = `UPDATE users SET updated_at = NOW() `;
       let updateValues = [];
 
@@ -177,17 +181,16 @@ router.patch(
         updateValues.push(alamat);
       }
 
-      if (image) {
-        const newImageUrl = image.location;
+      if (newImageUrl) {
         updateQuery += `, image_profile = ?`;
         updateValues.push(newImageUrl);
 
         // 🔹 Delete old image from S3
         if (oldImage) {
           const oldImageKey = oldImage.split(`${S3_BUCKET}/`)[1];
-          await s3
-            .deleteObject({ Bucket: S3_BUCKET, Key: oldImageKey })
-            .promise();
+          await s3.send(
+            new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: oldImageKey })
+          );
         }
       }
 
@@ -200,7 +203,7 @@ router.patch(
       res.formatResponse(200, true, "Profile updated successfully", {
         userId,
         alamat: alamat || users[0].alamat,
-        image_profile: image ? image.location : oldImage,
+        image_profile: newImageUrl || oldImage,
       });
     } catch (error) {
       console.error("🚨 Profile Update Error:", error.message);
