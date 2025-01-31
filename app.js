@@ -3,21 +3,29 @@ const createError = require("http-errors");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
-const multer = require("multer");
+const cors = require("cors");
 const responseFormatter = require("./lib/middleware/responseFormatter");
 require("dotenv").config();
 const indexRouter = require("./routes/index");
 const usersRouter = require("./routes/users");
 const menuRouter = require("./routes/menu");
+const orderRouter = require("./routes/order");
 const db = require("./lib/dbConnection");
+const verifyToken = require("./lib/middleware/verifyToken");
 
 const app = express();
-const upload = multer();
+
+app.use(
+  cors({
+    origin: "*",
+    methods: "GET,POST,PUT,DELETE,OPTIONS",
+    allowedHeaders: "Content-Type, Authorization",
+  })
+);
 
 const bodyParserMiddleware = [
   express.json(),
   express.urlencoded({ extended: true }),
-  upload.none(),
 ];
 
 // Middleware
@@ -25,14 +33,18 @@ app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParserMiddleware);
 app.use(responseFormatter);
+
+app.use(verifyToken);
 
 // Routes
 app.use("/", indexRouter);
 app.use("/users", usersRouter);
 app.use("/master-menu", menuRouter);
+app.use("/order", orderRouter);
 
 // Error Handling
 app.use((req, res, next) => {
@@ -60,15 +72,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 module.exports = app;
-
-// Start Server (For Local Testing)
-// if (process.env.NODE_ENV !== "serverless") {
-
-// }
-
-// // Export for Vercel
-// if (process.env.NODE_ENV === "serverless") {
-//   module.exports = serverless(app);
-// } else {
-//   module.exports = app;
-// }
