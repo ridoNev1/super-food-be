@@ -4,7 +4,15 @@ const db = require("../lib/dbConnection");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const uploadMiddleware = require("../lib/middleware/uploadFile");
-const fs = require("fs");
+const AWS = require("aws-sdk");
+
+// 🔹 Configure AWS S3
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+const S3_BUCKET = process.env.S3_BUCKET_NAME;
 
 // ✅ 1. LOGIN - Authenticate User
 router.post("/login", async (req, res) => {
@@ -170,14 +178,16 @@ router.patch(
       }
 
       if (image) {
+        const newImageUrl = image.location;
         updateQuery += `, image_profile = ?`;
-        updateValues.push(`/uploads/${image.filename}`);
+        updateValues.push(newImageUrl);
 
+        // 🔹 Delete old image from S3
         if (oldImage) {
-          const oldImagePath = "." + oldImage;
-          if (fs.existsSync(oldImagePath)) {
-            fs.unlinkSync(oldImagePath);
-          }
+          const oldImageKey = oldImage.split(`${S3_BUCKET}/`)[1];
+          await s3
+            .deleteObject({ Bucket: S3_BUCKET, Key: oldImageKey })
+            .promise();
         }
       }
 
@@ -190,7 +200,7 @@ router.patch(
       res.formatResponse(200, true, "Profile updated successfully", {
         userId,
         alamat: alamat || users[0].alamat,
-        image_profile: image ? `/uploads/${image.filename}` : oldImage,
+        image_profile: image ? image.location : oldImage,
       });
     } catch (error) {
       console.error("🚨 Profile Update Error:", error.message);

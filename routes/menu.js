@@ -2,9 +2,17 @@ const express = require("express");
 const router = express.Router();
 const db = require("../lib/dbConnection");
 const uploadMiddleware = require("../lib/middleware/uploadFile");
-const fs = require("fs");
+const AWS = require("aws-sdk");
 
-// ✅ 1. Create a New Menu Item with Image Upload
+// 🔹 Configure AWS S3
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+const S3_BUCKET = process.env.S3_BUCKET_NAME;
+
+// ✅ 1. CREATE MENU ITEM (WITH IMAGE UPLOAD)
 router.post("/menu", uploadMiddleware("images", true), async (req, res) => {
   try {
     const { name, price, description, quantity } = req.body;
@@ -26,11 +34,12 @@ router.post("/menu", uploadMiddleware("images", true), async (req, res) => {
 
     const menuId = menuResult.insertId;
 
+    // 🔹 Store images in DB (Save S3 URLs)
     if (images && images.length > 0) {
       const imageQueries = images.map((image) => {
         return db.query(
           `INSERT INTO menu_images (menu_id, image_url) VALUES (?, ?)`,
-          [menuId, `/uploads/${image.filename}`]
+          [menuId, image.location] // ✅ Store S3 URL instead of local path
         );
       });
 
@@ -48,7 +57,7 @@ router.post("/menu", uploadMiddleware("images", true), async (req, res) => {
   }
 });
 
-// ✅ 2. READ - Get all menu items with images
+// ✅ 2. READ ALL MENU ITEMS (WITH IMAGES)
 router.get("/menu", async (req, res) => {
   try {
     let { page, limit } = req.query;
@@ -70,6 +79,7 @@ router.get("/menu", async (req, res) => {
       LIMIT ? OFFSET ?`,
       [limit, offset]
     );
+
     menuItems.forEach((item) => {
       item.images = JSON.parse(item.images);
     });
@@ -100,6 +110,7 @@ router.get("/menu", async (req, res) => {
   }
 });
 
+// ✅ 3. GET MENU ITEM BY ID (WITH IMAGES)
 router.get("/menu/:id", async (req, res) => {
   try {
     const menuId = req.params.id;
@@ -135,9 +146,7 @@ router.get("/menu/:id", async (req, res) => {
   }
 });
 
-/**
- * ✅ UPDATE MENU - Update a menu item with optional image update
- */
+// ✅ 4. UPDATE MENU ITEM (WITH IMAGE UPDATE)
 router.put("/menu/:id", uploadMiddleware("images", true), async (req, res) => {
   try {
     const menuId = req.params.id;
@@ -155,9 +164,7 @@ router.put("/menu/:id", uploadMiddleware("images", true), async (req, res) => {
     const connection = await db.getConnection();
 
     const [updateResult] = await connection.query(
-      `UPDATE menu 
-       SET name = ?, price = ?, description = ?, quantity = ?, updated_at = NOW() 
-       WHERE id = ?`,
+      `UPDATE menu SET name = ?, price = ?, description = ?, quantity = ?, updated_at = NOW() WHERE id = ?`,
       [name, price, description, quantity, menuId]
     );
 
@@ -166,31 +173,27 @@ router.put("/menu/:id", uploadMiddleware("images", true), async (req, res) => {
       return res.formatResponse(404, false, "Menu item not found");
     }
 
+    // 🔹 Delete Images from S3 if requested
     if (deleteImages && deleteImages.length > 0) {
-      const [oldImages] = await connection.query(
-        `SELECT image_url FROM menu_images WHERE id IN (?) AND menu_id = ?`,
-        [deleteImages, menuId]
-      );
-
-      oldImages.forEach((img) => {
-        const filePath = "." + img.image_url;
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      });
-
-      await connection.query(
-        `DELETE FROM menu_images WHERE id IN (?) AND menu_id = ?`,
-        [deleteImages, menuId]
+      await Promise.all(
+        deleteImages.map(async (imageUrl) => {
+          const key = imageUrl.split(`${S3_BUCKET}/`)[1];
+          await s3.deleteObject({ Bucket: S3_BUCKET, Key: key }).promise();
+          await connection.query(
+            `DELETE FROM menu_images WHERE image_url = ?`,
+            [imageUrl]
+          );
+        })
       );
     }
 
+    // 🔹 Upload new images to S3
     if (images && images.length > 0) {
       const imageQueries = images.map((image) => {
         return connection.query(
           `INSERT INTO menu_images (menu_id, image_url) VALUES (?, ?)`,
-          [menuId, `/uploads/${image.filename}`]
-        );
+          [menuId, image.location]
+        ); // ✅ Save S3 URL
       });
 
       await Promise.all(imageQueries);
@@ -210,41 +213,34 @@ router.put("/menu/:id", uploadMiddleware("images", true), async (req, res) => {
   }
 });
 
-/**
- * ✅ DELETE MENU - Delete a menu item and its images
- */
+// ✅ 5. DELETE MENU ITEM (WITH IMAGE DELETE)
 router.delete("/menu/:id", async (req, res) => {
   try {
     const menuId = req.params.id;
     const connection = await db.getConnection();
 
+    // 🔹 Delete images from S3
     const [images] = await connection.query(
       `SELECT image_url FROM menu_images WHERE menu_id = ?`,
       [menuId]
     );
-
-    images.forEach((img) => {
-      const filePath = "." + img.image_url;
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    });
+    await Promise.all(
+      images.map((img) =>
+        s3
+          .deleteObject({
+            Bucket: S3_BUCKET,
+            Key: img.image_url.split(`${S3_BUCKET}/`)[1],
+          })
+          .promise()
+      )
+    );
 
     await connection.query(`DELETE FROM menu_images WHERE menu_id = ?`, [
       menuId,
     ]);
-
-    const [deleteResult] = await connection.query(
-      `DELETE FROM menu WHERE id = ?`,
-      [menuId]
-    );
+    await connection.query(`DELETE FROM menu WHERE id = ?`, [menuId]);
 
     connection.release();
-
-    if (deleteResult.affectedRows === 0) {
-      return res.formatResponse(404, false, "Menu item not found");
-    }
-
     res.formatResponse(200, true, "Menu item and images deleted successfully");
   } catch (error) {
     console.error("🚨 Database Error:", error.message);
