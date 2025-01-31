@@ -187,7 +187,7 @@ router.patch(
 
         // 🔹 Delete old image from S3
         if (oldImage) {
-          const oldImageKey = oldImage.split(`${S3_BUCKET}/`)[1];
+          const oldImageKey = oldImage.split(`${S3_BUCKET}.`)[1];
           await s3.send(
             new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: oldImageKey })
           );

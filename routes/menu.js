@@ -180,7 +180,7 @@ router.put("/menu/:id", uploadMiddleware("images", true), async (req, res) => {
     if (deleteImages && deleteImages.length > 0) {
       await Promise.all(
         deleteImages.map(async (imageUrl) => {
-          const key = imageUrl.split(`${S3_BUCKET}/`)[1];
+          const key = imageUrl.split(`${S3_BUCKET}.`)[1];
           await s3.send(
             new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key })
           );
@@ -232,7 +232,7 @@ router.delete("/menu/:id", async (req, res) => {
     // 🔹 Delete images from S3
     await Promise.all(
       images.map(async (img) => {
-        const key = img.image_url.split(`${S3_BUCKET}/`)[1]; // Extract S3 key
+        const key = img.image_url.split(`${S3_BUCKET}.`)[1]; // Extract S3 key
         await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
       })
     );
