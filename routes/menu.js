@@ -63,9 +63,10 @@ router.post("/menu", uploadMiddleware("images", true), async (req, res) => {
 // ✅ 2. READ ALL MENU ITEMS (WITH IMAGES)
 router.get("/menu", async (req, res) => {
   try {
-    let { page, limit } = req.query;
+    let { page, limit, search } = req.query;
     page = parseInt(page) || 1;
     limit = parseInt(limit) || 10;
+    search = search ? `%${search}%` : "%%";
     const offset = (page - 1) * limit;
 
     const connection = await db.getConnection();
@@ -73,14 +74,17 @@ router.get("/menu", async (req, res) => {
     const [menuItems] = await connection.query(
       `SELECT 
         m.id, m.name, m.price, m.description, m.quantity,
-        COALESCE(JSON_ARRAYAGG(
-          JSON_OBJECT('id', mi.id, 'url', mi.image_url)
-        ), '[]') AS images
+        COALESCE(
+          JSON_ARRAYAGG(
+            JSON_OBJECT('id', mi.id, 'url', mi.image_url)
+          ), JSON_ARRAY()
+        ) AS images
       FROM menu m
       LEFT JOIN menu_images mi ON m.id = mi.menu_id
+      WHERE m.name LIKE ?
       GROUP BY m.id
       LIMIT ? OFFSET ?`,
-      [limit, offset]
+      [search, limit, offset]
     );
 
     menuItems.forEach((item) => {
